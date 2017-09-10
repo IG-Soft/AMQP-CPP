@@ -82,6 +82,8 @@ receivedframe.cpp
 reducedbuffer.h
 returnedmessage.h
 table.cpp
+tcp.h
+tcp.cpp
 tcpclosed.h
 tcpconnected.h
 tcpconnection.cpp
@@ -97,4 +99,5 @@ transactionrollbackokframe.h
 transactionselectframe.h
 transactionselectokframe.h
 watchable.cpp
+numeric_cast.h
 )

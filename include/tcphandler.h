@@ -14,6 +14,8 @@
  */
 #pragma once
 
+#include "tcpdefines.h"
+
 /**
  *  Set up namespace
  */
@@ -95,7 +97,9 @@ public:
      *  @param  fd          The filedescriptor to be monitored
      *  @param  flags       Should the object be monitored for readability or writability?
      */
-    virtual void monitor(TcpConnection *connection, int fd, int flags) = 0;
+    virtual void monitor(TcpConnection *connection, tcp::Socket fd, int flags) = 0;
+
+
 };
     
 /**

@@ -215,9 +215,12 @@ public:
     {
         // logins must match
         if (_login != that._login) return false;
-
         // hostname must match, but are nt case sensitive
+#if _MSC_VER
+		if (_stricmp(_hostname.data(), that._hostname.data()) != 0) return false;
+#else
         if (strcasecmp(_hostname.data(), that._hostname.data()) != 0) return false;
+#endif
 
         // portnumber must match
         if (_port != that._port) return false;

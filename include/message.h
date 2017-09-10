@@ -19,6 +19,7 @@
  *  Dependencies
  */
 #include "envelope.h"
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -90,7 +91,7 @@ protected:
         if (_allocated)
         {
             // prevent overflow
-            size = std::min(size, _bodySize - _filled);
+            size = std::min<uint64_t>(size, _bodySize - _filled);
             
             // append more data
             memcpy(_body + _filled, buffer, size);
@@ -113,10 +114,10 @@ protected:
             _allocated = true;
             
             // append more data
-            memcpy(_body, buffer, std::min(size, _bodySize));
+            memcpy(_body, buffer, std::min<size_t>(size, _bodySize));
             
             // update filled data
-            _filled = std::min(size, _bodySize);
+            _filled = std::min<size_t>(size, _bodySize);
         }
             
         // check if we're done

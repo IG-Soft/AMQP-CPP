@@ -3,7 +3,7 @@
  * 
  *  @copyright 2014 Copernica BV
  */
-
+#pragma once
 /**
  *  Set up namespace
  */

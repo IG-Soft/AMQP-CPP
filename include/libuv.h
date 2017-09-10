@@ -44,11 +44,38 @@ private:
          */
         uv_loop_t *_loop;
 
+        uv_poll_t *_poll;
+
         /**
          *  The actual watcher structure
          *  @var uv_poll_t
          */
-        uv_poll_t *_poll;
+		uv_pipe_t *_pipe;
+
+		static void pipe_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
+		{
+			buf->base = (char*)malloc(sizeof(char));
+
+			buf->len = 1;
+		}
+		
+		static void pipe_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* rdbuf)
+		{
+			auto handle = reinterpret_cast<uv_handle_t*>(stream);
+
+			TcpConnection *connection = static_cast<TcpConnection*>(handle->data);
+#if _MSC_VER
+			int fd = stream->u.fd;
+#else
+			int fd = -1;
+
+			uv_fileno(handle, (uv_os_fd_t*)&fd);
+#endif
+			if (fd != -1)
+			{
+				connection->process(fd, readable);
+			}
+		}
 
         /**
          *  Callback method that is called by libuv when a filedescriptor becomes active
@@ -60,11 +87,17 @@ private:
         {
             // retrieve the connection
             TcpConnection *connection = static_cast<TcpConnection*>(handle->data);
+#if _MSC_VER
+			int fd = handle->socket;
+#else
+			int fd = -1;
 
-            // tell the connection that its filedescriptor is active
-            int fd = -1;
-            uv_fileno(reinterpret_cast<uv_handle_t*>(handle), &fd);
-            connection->process(fd, uv_to_amqp_events(status, events));
+            uv_fileno(reinterpret_cast<uv_handle_t*>(handle), (uv_os_fd_t*)&fd);
+#endif
+			if (fd != -1)
+			{
+				connection->process(fd, uv_to_amqp_events(status, events));
+			}
         }
 
     public:
@@ -77,17 +110,44 @@ private:
          */
         Watcher(uv_loop_t *loop, TcpConnection *connection, int fd, int events) : _loop(loop)
         {
-            // create a new poll
             _poll = new uv_poll_t();
 
             // initialize the libev structure
-            uv_poll_init(_loop, _poll, fd);
-
+#if _MSC_VER
+			const int errcode = uv_poll_init_socket(_loop, _poll, fd);
+#else
+            const int errcode = uv_poll_init(_loop, _poll, fd);
+#endif
+			if (errcode == 0)
+			{
             // store the connection in the data "void*"
             _poll->data = connection;
 
             // start the watcher
             uv_poll_start(_poll, amqp_to_uv_events(events), callback);
+        }
+			else {
+				delete _poll;
+
+				_poll = nullptr;
+
+				if (errcode == UV_ENOTSOCK)
+				{
+					_pipe = new uv_pipe_t();
+
+					// initialize the pipe structure
+					uv_pipe_init(loop, _pipe, 0);
+
+					// store the connection in the data "void*"
+					_pipe->data = connection;
+
+					// open the pipe over the existing fd
+					uv_pipe_open(_pipe, fd);
+
+					// start the watcher
+					uv_read_start((uv_stream_t*)_pipe, pipe_alloc_callback, pipe_read_callback);
+				}
+			}
         }
 
         /**
@@ -103,6 +163,8 @@ private:
          */
         virtual ~Watcher()
         {
+			if (_poll)
+			{
             // stop the watcher
             uv_poll_stop(_poll);
 
@@ -111,6 +173,21 @@ private:
                 // delete memory once closed
                 delete reinterpret_cast<uv_poll_t*>(handle);
             });
+        }
+
+			if (_pipe)
+			{
+				// stop reading data from the stream.
+				uv_read_stop((uv_stream_t*)_pipe);
+
+				uv_close(reinterpret_cast<uv_handle_t*>(_pipe), [](uv_handle_t* handle) {
+					// delete memory once closed
+					delete reinterpret_cast<uv_pipe_t*>(handle);
+				});
+
+				// delete the uv pipe without closing the file descriptor. It will be closed elsewhere
+				//delete _pipe;
+			}
         }
 
         /**
@@ -177,7 +254,7 @@ private:
      *  @param  fd          The filedescriptor to be monitored
      *  @param  flags       Should the object be monitored for readability or writability?
      */
-    virtual void monitor(TcpConnection *connection, int fd, int flags) override
+    virtual void monitor(TcpConnection *connection, tcp::Socket fd, int flags) override
     {
         // do we already have this filedescriptor
         auto iter = _watchers.find(fd);

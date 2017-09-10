@@ -38,7 +38,7 @@ protected:
      *  Size of the data
      *  @var    uint64_t
      */
-    uint64_t _bodySize;
+    size_t _bodySize;
     
     /**
      *  Was the data allocated by this object?
@@ -87,7 +87,7 @@ public:
      *  Size of the body
      *  @return uint64_t
      */
-    uint64_t bodySize() const
+    size_t bodySize() const
     {
         return _bodySize;
     }
